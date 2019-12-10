@@ -10,36 +10,38 @@ namespace Runner
 {
     public class Program
     {
-        private static System.Diagnostics.Process _Process = null;
-        public static void Main(string[] args)
+        private static Process _Process = null;
+        public static void Main(string[] args) // args = [xyz.dll]
         {
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
-            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
-            startInfo.UseShellExecute = false;
-            startInfo.RedirectStandardInput = true;
-            startInfo.RedirectStandardOutput = true;
-            startInfo.RedirectStandardError = true;
-            startInfo.Verb = "runas";
-            //startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            startInfo.FileName = @"C:\Windows\System32\cmd.exe";
-            startInfo.WorkingDirectory = Directory.GetCurrentDirectory();
-            startInfo.Arguments = "/c dotnet " + string.Join(" ", args);
-            process.StartInfo = startInfo;
-            process.Start();
-            _Process = process;
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            // Create a new process in which dotnet core API will run
+            _Process = new Process();
 
+            // Configure process
+            ProcessStartInfo startInfo = new ProcessStartInfo();
 
-            Console.CancelKeyPress += Console_CancelKeyPress;
-            process.OutputDataReceived += Process_OutputDataReceived;
-            process.ErrorDataReceived += Process_ErrorDataReceived;
+            startInfo.UseShellExecute = false; // disable shell execute to prevent cmd window
+            startInfo.RedirectStandardInput = true; // enable forked process to redirect input to primary process
+            startInfo.RedirectStandardOutput = true; // enable forked process to redirect output to primary process
+            startInfo.RedirectStandardError = true; // enable forked process to redirect error to primary process
+
+            startInfo.Verb = "runas"; // run as administrator
+            startInfo.FileName = @"C:\Windows\System32\cmd.exe"; // run dotnet command on windows command line
+            startInfo.WorkingDirectory = Directory.GetCurrentDirectory(); // place runner.exe in the same folder where .NET Core dll is
+            startInfo.Arguments = "/c dotnet " + string.Join(" ", args); // e.g. dotnet xyz.dll
+
+            _Process.StartInfo = startInfo;
+            _Process.Start();
+
+            _Process.BeginOutputReadLine(); // start redirecting forked process output to primary process
+            _Process.BeginErrorReadLine(); // start redirecting forked process errors to primary process
+
+            Console.CancelKeyPress += Console_CancelKeyPress; // if cancel key is pressed then stop the forked process
+            _Process.OutputDataReceived += Process_OutputDataReceived;
+            _Process.ErrorDataReceived += Process_ErrorDataReceived;
 
             AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
 
-
-
-            process.WaitForExit();
+            _Process.WaitForExit();
         }
 
         private static void Process_ErrorDataReceived(object sender, DataReceivedEventArgs e)
@@ -47,7 +49,7 @@ namespace Runner
             try
             {
                 Console.WriteLine(e.Data);
-                System.IO.File.AppendAllText("Logs.txt", "Error: " + e.Data + "\n");
+                File.AppendAllText("Logs.txt", "Error: " + e.Data + "\n");
             }
             catch (Exception)
             {
@@ -59,7 +61,7 @@ namespace Runner
             try
             {
                 Console.WriteLine(e.Data);
-                System.IO.File.AppendAllText("Logs.txt", "Output: " + e.Data + "\n");
+                File.AppendAllText("Logs.txt", "Output: " + e.Data + "\n"); // Log standard output to file.
             }
             catch (Exception)
             {
@@ -78,7 +80,7 @@ namespace Runner
 
         public static void Exit()
         {
-            _Process.StandardInput.Close();
+            _Process.StandardInput.Close(); // this will kill forked process
             Environment.Exit(0);
         }
     }
